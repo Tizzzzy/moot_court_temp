@@ -18,58 +18,6 @@ from backend.models import verification_token as verification_token_model  # Ens
 from backend.models import case as case_model  # Ensure all case/evidence tables are created
 
 
-def _ensure_evidence_file_path_nullable() -> None:
-    """Backfill schema compatibility for SQLite databases created before nullable file_path."""
-    if "sqlite" not in settings.DATABASE_URL:
-        return
-
-    try:
-        with engine.begin() as conn:
-            table_rows = conn.execute(text("PRAGMA table_info(evidence_files)")).mappings().all()
-            if not table_rows:
-                return
-
-            file_path_row = next((row for row in table_rows if row.get("name") == "file_path"), None)
-            if file_path_row is None or int(file_path_row.get("notnull", 0)) == 0:
-                return
-
-            print("[STARTUP] Migrating evidence_files.file_path to nullable")
-            conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
-            conn.exec_driver_sql(
-                """
-                CREATE TABLE evidence_files_new (
-                    id INTEGER PRIMARY KEY,
-                    evidence_item_id INTEGER NOT NULL,
-                    filename VARCHAR(255) NOT NULL,
-                    file_path TEXT,
-                    feedback TEXT,
-                    is_ready BOOLEAN,
-                    mime_type VARCHAR(100),
-                    size_bytes INTEGER,
-                    uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY(evidence_item_id) REFERENCES evidence_items (id)
-                )
-                """
-            )
-            conn.exec_driver_sql(
-                """
-                INSERT INTO evidence_files_new (
-                    id, evidence_item_id, filename, file_path, feedback, is_ready, mime_type, size_bytes, uploaded_at
-                )
-                SELECT
-                    id, evidence_item_id, filename, file_path, feedback, is_ready, mime_type, size_bytes, uploaded_at
-                FROM evidence_files
-                """
-            )
-            conn.exec_driver_sql("DROP TABLE evidence_files")
-            conn.exec_driver_sql("ALTER TABLE evidence_files_new RENAME TO evidence_files")
-            conn.exec_driver_sql("PRAGMA foreign_keys=ON")
-            print("[STARTUP] Schema migration complete")
-    except Exception as exc:
-        logger.exception("Failed to migrate evidence_files.file_path schema: %s", exc)
-        raise
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Validate path configuration on startup
@@ -85,7 +33,6 @@ async def lifespan(app: FastAPI):
     # Create tables on startup
     print("[STARTUP] Creating database tables...")
     Base.metadata.create_all(bind=engine)
-    _ensure_evidence_file_path_nullable()
     print("[STARTUP] Database tables created")
     yield
     print("[SHUTDOWN] Closing database connection...")

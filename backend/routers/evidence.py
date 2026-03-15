@@ -1,5 +1,6 @@
 ﻿import shutil
 import logging
+import mimetypes
 from pathlib import Path
 from datetime import datetime, date
 from fastapi import APIRouter, HTTPException, UploadFile, Depends
@@ -401,6 +402,11 @@ def analyze_evidence(
         file_path = str(staged_file_path)
         filename = staged_file_path.name
         staged_size = staged_file_path.stat().st_size if staged_file_path.exists() else 0
+        
+        guessed_type, _ = mimetypes.guess_type(filename)
+        # Fallback to octet-stream only if the extension is completely unknown
+        final_mime_type = guessed_type or "application/octet-stream"
+        
         ready_status, feedback = analyze_evidence_file(
             case_data, description, [file_path], settings.GEMINI_API_KEY
         )
@@ -417,7 +423,7 @@ def analyze_evidence(
                 file_path=str(ready_path),
                 feedback=feedback,
                 is_ready=True,
-                mime_type="application/octet-stream",
+                mime_type=final_mime_type,
                 size_bytes=ready_path.stat().st_size,
             ))
         else:
@@ -428,7 +434,7 @@ def analyze_evidence(
                 file_path=None,
                 feedback=feedback,
                 is_ready=False,
-                mime_type="application/octet-stream",
+                mime_type=final_mime_type,
                 size_bytes=staged_size,
             ))
 
