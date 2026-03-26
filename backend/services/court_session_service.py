@@ -169,9 +169,12 @@ class CourtSessionService:
             .first()
         )
         verdict_outcome = db_session.verdict_outcome if db_session else None
+        status = db_session.status if db_session else "active"
 
         return {
             "session_id": session_id,
+            "case_id": db_session.case_id if db_session else None,
+            "status": status,
             "current_speaker": court_session.current_speaker,
             "turn_number": court_session.turn_number,
             "history": [self._response_to_dict(msg) for msg in court_session.history],

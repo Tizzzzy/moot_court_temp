@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 
 # Configure logging to show INFO level
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -16,6 +16,22 @@ from backend.utils.path_utils import validate_path_config
 from backend.models import user as user_model  # Ensure users table is created
 from backend.models import verification_token as verification_token_model  # Ensure verification_tokens table is created
 from backend.models import case as case_model  # Ensure all case/evidence tables are created
+
+
+def ensure_users_token_reset_column() -> None:
+    """Add token_reset_at column for existing databases without migrations."""
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("users")}
+    if "token_reset_at" in existing_columns:
+        return
+
+    print("[STARTUP] Adding users.token_reset_at column...")
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users ADD COLUMN token_reset_at DATETIME"))
+    print("[STARTUP] Added users.token_reset_at column")
 
 
 @asynccontextmanager
@@ -33,6 +49,7 @@ async def lifespan(app: FastAPI):
     # Create tables on startup
     print("[STARTUP] Creating database tables...")
     Base.metadata.create_all(bind=engine)
+    ensure_users_token_reset_column()
     print("[STARTUP] Database tables created")
     yield
     print("[SHUTDOWN] Closing database connection...")

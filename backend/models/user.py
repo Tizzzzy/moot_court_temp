@@ -19,4 +19,5 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     tokens_used = Column(Integer, default=0)
     token_limit = Column(Integer, default=30000)
+    token_reset_at = Column(DateTime, server_default=func.now())
     created_at = Column(DateTime, server_default=func.now())

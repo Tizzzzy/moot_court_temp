@@ -8,6 +8,7 @@ from backend.database import get_db
 from backend.models.user import User
 from backend.models.case import Case, CourtSessionModel, Party
 from backend.utils.auth_utils import get_current_user
+from backend.utils.token_tracker import refresh_user_tokens_if_needed
 from pydantic import BaseModel
 
 
@@ -73,6 +74,8 @@ async def get_dashboard_summary(
             cases=[],
             sessions=[],
         )
+
+    refresh_user_tokens_if_needed(user, db)
 
     # Get cases for this user
     cases = (

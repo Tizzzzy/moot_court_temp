@@ -19,6 +19,7 @@ from backend.services.email_service import (
     send_verification_email,
     send_password_reset_email,
 )
+from backend.utils.token_tracker import refresh_user_tokens_if_needed
 
 router = APIRouter(tags=["authentication"])
 
@@ -275,11 +276,19 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(current_user: User = Depends(get_current_user)):
+async def get_me(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     Get current user info from JWT token.
     Used by frontend on page load to validate token.
     """
+    fresh_user = db.query(User).filter(User.id == current_user.id).first()
+    if fresh_user:
+        refresh_user_tokens_if_needed(fresh_user, db)
+        current_user = fresh_user
+
     return UserResponse(
         user_id=current_user.id,
         username=current_user.username,
